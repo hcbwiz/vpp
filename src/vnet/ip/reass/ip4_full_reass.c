@@ -37,7 +37,7 @@
  * running out context space and unable to perform reassembly */
 #define IP4_REASS_EXPIRE_WALK_INTERVAL_DEFAULT_MS 50 // 50 ms default
 #define IP4_REASS_MAX_REASSEMBLIES_DEFAULT 1024
-#define IP4_REASS_MAX_REASSEMBLY_LENGTH_DEFAULT	  3
+#define IP4_REASS_MAX_REASSEMBLY_LENGTH_DEFAULT 8
 #define IP4_REASS_HT_LOAD_FACTOR (0.75)
 
 #define IP4_REASS_DEBUG_BUFFERS 0
