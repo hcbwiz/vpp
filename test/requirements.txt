@@ -6,7 +6,7 @@ ipaddress; python_version < '3.3'       # PSF
 parameterized>=0.6.1                    # BSD
 pexpect                                 # ISC
 psutil                                  # BSD
-scapy==2.4.3; python_version >= '2.7' or python_version >= '3.4'    # GPL2  https://github.com/secdev/scapy/blob/master/LICENSE
+scapy==2.4.4; python_version >= '2.7' or python_version >= '3.4'    # GPL2  https://github.com/secdev/scapy/blob/master/LICENSE
 six                                     # MIT
 syslog_rfc5424_parser>=0.3.1            # ISC
 objgraph                                # MIT
