@@ -1220,10 +1220,12 @@ list(APPEND VNET_HEADERS
   fib/fib_node_list.h
   fib/fib_entry.h
   fib/fib_entry_delegate.h
+  fib/fib_entry_track.h
   fib/fib_path.h
   fib/fib_path_list.h
   fib/fib_sas.h
   fib/fib_source.h
+  fib/fib_walk.h
 )
 
 list(APPEND VNET_API_FILES
