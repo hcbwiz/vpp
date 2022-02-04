@@ -71,6 +71,10 @@ DEB_DEPENDS += libffi-dev python3-ply libmbedtls-dev
 DEB_DEPENDS += cmake ninja-build uuid-dev python3-jsonschema python3-yaml
 DEB_DEPENDS += python3-venv  # ensurepip
 DEB_DEPENDS += python3-dev   # needed for python3 -m pip install psutil
+DEB_DEPENDS += liburcu-dev yamllint
+ifeq ($(MACHINE),x86_64)
+DEB_DEPENDS += libhyperscan-dev
+endif
 DEB_DEPENDS += libnl-3-dev libnl-route-3-dev
 DEB_DEPENDS += enchant  # for docs
 DEB_DEPENDS += python3-virtualenv
@@ -148,6 +152,9 @@ endif
 # +ganglia-devel if building the ganglia plugin
 
 RPM_DEPENDS += chrpath libffi-devel rpm-build
+ifeq ($(MACHINE),x86_64)
+RPM_DEPENDS += hyperscan-devel
+endif
 
 RPM_DEPENDS_DEBUG  = glibc-debuginfo e2fsprogs-debuginfo
 RPM_DEPENDS_DEBUG += krb5-debuginfo openssl-debuginfo
