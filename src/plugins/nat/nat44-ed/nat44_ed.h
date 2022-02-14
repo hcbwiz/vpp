@@ -195,6 +195,16 @@ typedef enum
 #define NAT_SM_FLAG_LB		   (1 << 7)
 #define NAT_SM_FLAG_SWITCH_ADDRESS (1 << 8)
 
+typedef struct
+{
+  ip4_address_t framed_addr;
+  ip4_address_t external_addr;
+  u16 start_port;
+  u16 end_port;
+  u16 block_size;
+  u32 *bound_sessions;
+} snat_binding_t;
+
 typedef CLIB_PACKED(struct
 {
   // number of sessions in this vrf
@@ -350,6 +360,8 @@ typedef CLIB_PACKED(struct
   u32 per_vrf_sessions_index;
 
   u32 thread_index;
+  snat_binding_t *binding;
+
 }) snat_session_t;
 
 typedef struct
@@ -495,6 +507,9 @@ typedef struct
   u32 thread_index;
 
   per_vrf_sessions_t *per_vrf_sessions_vec;
+
+  mhash_t binding_index_by_ip;
+  snat_binding_t *bindings;
 
 } snat_main_per_thread_data_t;
 
@@ -666,6 +681,14 @@ typedef struct snat_main_s
   /* nat44 plugin enabled */
   u8 enabled;
 
+  /* Find a nat binding by external */
+  clib_bihash_8_8_t binding_mapping_by_external;
+  /* UPG: Controlled NAT function */
+  u8 controlled;
+
+  /* Controlled NAT hook for IPFIX */
+  void (*nat44_ed_controlled_report_src_port) (vlib_buffer_t *, u16 port);
+
   vnet_main_t *vnet_main;
 
 } snat_main_t;
@@ -703,6 +726,7 @@ extern fib_source_t nat_fib_src_hi;
 extern fib_source_t nat_fib_src_low;
 
 /* format functions */
+format_function_t format_binding_key;
 format_function_t format_snat_static_mapping;
 format_function_t format_snat_static_map_to_resolve;
 format_function_t format_snat_session;
@@ -1027,6 +1051,26 @@ void nat_6t_l3_l4_csum_calc (nat_6t_flow_t *f);
 format_function_t format_nat_ed_translation_error;
 format_function_t format_nat_6t_flow;
 format_function_t format_ed_session_kvp;
+
+snat_binding_t* nat_ed_get_binding (snat_main_per_thread_data_t * tsm,
+                                 ip4_address_t addr);
+
+void
+nat_ed_del_sessions_per_binding (snat_main_per_thread_data_t * tsm,
+                              snat_binding_t * bn);
+
+u16
+nat_ed_add_binding (snat_main_per_thread_data_t * tsm, ip4_address_t user_addr,
+                 ip4_address_t ext_addr, u16 start_port, u16 end_port);
+
+#define NAT_CONTROLLED_MAX_PORT 64000
+__clib_export int nat_ed_del_binding (ip4_address_t user_addr);
+
+__clib_export u16
+nat_ed_create_binding (ip4_address_t user_addr, ip4_address_t ext_addr,
+                    u16 min_port, u16 block_size);
+__clib_export u16 nat_ed_calc_block (ip4_address_t ext_addr, u16 start_port,
+                                  u16 block_size);
 
 snat_static_mapping_t *nat44_ed_sm_i2o_lookup (snat_main_t *sm,
 					       ip4_address_t addr, u16 port,
