@@ -29,6 +29,45 @@
 #include <nat/nat44-ed/nat44_ed.h>
 
 always_inline void
+split_binding_key (u64 key, ip4_address_t * addr, u16 * sport, u16 * eport)
+{
+  if (addr)
+    {
+      addr->as_u32 = key >> 32;
+    }
+  if (sport)
+    {
+      *sport = (key >> 16) & (u16) ~ 0;
+    }
+  if (eport)
+    {
+      *eport = (key & ((1 << 16) - 1));
+    }
+}
+
+always_inline u64
+calc_binding_key (ip4_address_t addr, u16 sport, u16 eport)
+{
+  return (u64) addr.as_u32 << 32 | (u64) sport << 16 | (u64) eport;
+}
+
+always_inline void
+init_binding_k (clib_bihash_kv_8_8_t * kv, ip4_address_t addr, u16 sport,
+                u16 eport)
+{
+  kv->key = calc_binding_key (addr, sport, eport);
+  kv->value = ~0ULL;
+}
+
+always_inline void
+init_binding_kv (clib_bihash_kv_8_8_t * kv, ip4_address_t addr, u16 sport,
+                 u16 eport, u64 value)
+{
+  init_binding_k (kv, addr, sport, eport);
+  kv->value = value;
+}
+
+always_inline void
 init_ed_k (clib_bihash_kv_16_8_t *kv, u32 l_addr, u16 l_port, u32 r_addr,
 	   u16 r_port, u32 fib_index, ip_protocol_t proto)
 {

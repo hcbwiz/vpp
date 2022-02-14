@@ -2428,6 +2428,7 @@ VLIB_INIT_FUNCTION (nat_init);
 int
 nat44_plugin_enable (nat44_config_t c)
 {
+  void (*controlled_nat_report_port) (vlib_buffer_t *, u16);
   snat_main_t *sm = &snat_main;
 
   fail_if_enabled ();
@@ -2492,9 +2493,185 @@ nat44_plugin_enable (nat44_config_t c)
 	}
     }
 
+  /* Controlled NAT settings */
+  sm->controlled = 0;
+  controlled_nat_report_port = vlib_get_plugin_symbol
+    ("upf_plugin.so", "upf_nat_get_src_port");
+  sm->nat44_ed_controlled_report_src_port = controlled_nat_report_port;
+
+  clib_bihash_init_8_8 (&sm->binding_mapping_by_external,
+                        "binding_mapping_by_external",
+                        sm->translation_buckets, 0);
+  clib_bihash_set_kvp_format_fn_8_8 (&sm->binding_mapping_by_external,
+                                     format_binding_mapping_kvp);
+
   sm->enabled = 1;
   sm->rconfig = c;
 
+  return 0;
+}
+
+snat_binding_t *
+nat_ed_get_binding (snat_main_per_thread_data_t * tsm, ip4_address_t addr)
+{
+  uword *p = NULL;
+  p = mhash_get (&tsm->binding_index_by_ip, &addr);
+  if (!p)
+    return NULL;
+
+  return pool_elt_at_index (tsm->bindings, p[0]);
+}
+
+void
+nat_ed_del_sessions_per_binding (snat_main_per_thread_data_t * tsm,
+                              snat_binding_t * bn)
+{
+  snat_main_t *sm = &snat_main;
+  snat_session_t *ses;
+  u32 *ses_idx = 0;
+  snat_binding_t *this_bn;
+
+  vec_foreach (ses_idx, bn->bound_sessions)
+  {
+    if (pool_is_free_index (tsm->sessions, ses_idx[0]))
+      continue;
+    ses = pool_elt_at_index (tsm->sessions, ses_idx[0]);
+    this_bn = ses->binding;
+    if (!this_bn)
+      return;
+    if ((this_bn->external_addr.as_u32 == bn->external_addr.as_u32)
+        && (this_bn->framed_addr.as_u32 == bn->framed_addr.as_u32)
+        && (this_bn->start_port == bn->start_port)
+        && (this_bn->end_port == bn->end_port))
+      {
+        nat44_ed_free_session_data (sm, ses, tsm - sm->per_thread_data, 0);
+        nat_ed_session_delete (sm, ses, tsm - sm->per_thread_data, 1);
+      }
+  }
+
+}
+
+int
+verify_nat_binding (snat_binding_t * bn)
+{
+  snat_main_t *sm = &snat_main;
+
+  clib_bihash_kv_8_8_t kv, value;
+
+  init_binding_k (&kv, bn->external_addr, bn->start_port, bn->end_port);
+  if (!clib_bihash_search_8_8 (&sm->binding_mapping_by_external, &kv, &value))
+    {
+      return 1;
+    }
+  return 0;
+}
+
+u16
+nat_ed_calc_block (ip4_address_t ext_addr, u16 start_port, u16 block_size)
+{
+  snat_main_t *sm = &snat_main;
+  clib_bihash_kv_8_8_t kv, value;
+  u16 start, end = 0;
+
+  start = start_port;
+  end = start + block_size - 1;
+
+  while (end < NAT_CONTROLLED_MAX_PORT)
+    {
+      init_binding_k (&kv, ext_addr, start, end);
+      if (clib_bihash_search_8_8
+          (&sm->binding_mapping_by_external, &kv, &value))
+        return start;
+
+      start += block_size;
+      end += block_size;
+    }
+
+  return 0;
+
+}
+
+u16
+nat_ed_add_binding (snat_main_per_thread_data_t * tsm, ip4_address_t user_addr,
+                 ip4_address_t ext_addr, u16 min_port, u16 block_size)
+{
+  snat_main_t *sm = &snat_main;
+  snat_binding_t *bn = NULL;
+  clib_bihash_kv_8_8_t kv;
+  u16 start_port;
+  u16 end_port;
+  uword *p = NULL;
+
+  p = mhash_get (&tsm->binding_index_by_ip, &user_addr);
+  if (p)
+    return 0;
+
+  start_port = nat_ed_calc_block (ext_addr, min_port, block_size);
+
+  if (!start_port)
+    {
+      nat_log_debug ("NAT Controlled: Can't find start port for given addr %U",
+                 format_ip4_address, &ext_addr);
+      return 0;
+    }
+
+  end_port = start_port + block_size - 1;
+
+  pool_get (tsm->bindings, bn);
+  memset (bn, 0, sizeof (*bn));
+  bn->framed_addr = user_addr;
+  bn->external_addr = ext_addr;
+  bn->start_port = start_port;
+  bn->end_port = end_port;
+
+  mhash_set (&tsm->binding_index_by_ip, &bn->framed_addr, bn - tsm->bindings,
+             NULL);
+  init_binding_kv (&kv, bn->external_addr, bn->start_port, bn->end_port,
+                   bn - tsm->bindings);
+  clib_bihash_add_del_8_8 (&sm->binding_mapping_by_external, &kv, 1);
+
+  return start_port;
+}
+
+u16
+nat_ed_create_binding (ip4_address_t user_addr, ip4_address_t ext_addr,
+                    u16 min_port, u16 block_size)
+{
+  snat_main_t *sm = &snat_main;
+  snat_main_per_thread_data_t *tsm = &sm->per_thread_data[0];
+  u16 start_block;
+
+  start_block =
+    nat_ed_add_binding (tsm, user_addr, ext_addr, min_port, block_size);
+
+  return start_block;
+}
+
+int
+nat_ed_del_binding (ip4_address_t user_addr)
+{
+  snat_main_t *sm = &snat_main;
+  snat_main_per_thread_data_t *tsm;
+  clib_bihash_kv_8_8_t kv;
+  snat_binding_t *bn = NULL;
+  uword *p = NULL;
+
+  vec_foreach (tsm, sm->per_thread_data)
+  {
+    p = mhash_get (&tsm->binding_index_by_ip, &user_addr);
+    if (p)
+      {
+        bn = pool_elt_at_index (tsm->bindings, p[0]);
+        nat_ed_del_sessions_per_binding (tsm, bn);
+        mhash_unset (&tsm->binding_index_by_ip, &bn->framed_addr, NULL);
+        init_binding_k (&kv, bn->external_addr, bn->start_port, bn->end_port);
+        if (clib_bihash_add_del_8_8
+            (&sm->binding_mapping_by_external, &kv, 0))
+          nat_log_debug ("Binding by external key del failed");
+        vec_free (bn->bound_sessions);
+        pool_put (tsm->bindings, bn);
+      }
+  }
   return 0;
 }
 
@@ -3256,6 +3433,9 @@ nat44_ed_worker_db_init (snat_main_per_thread_data_t *tsm, u32 translations,
   pool_get (tsm->lru_pool, head);
   tsm->unk_proto_lru_head_index = head - tsm->lru_pool;
   clib_dlist_init (tsm->lru_pool, tsm->unk_proto_lru_head_index);
+
+  mhash_init (&tsm->binding_index_by_ip, sizeof (uword),
+              sizeof (ip4_address_t));
 }
 
 static void

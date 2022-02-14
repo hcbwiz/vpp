@@ -1838,6 +1838,61 @@ done:
   return error;
 }
 
+static clib_error_t *
+nat_controlled_set_command_fn (vlib_main_t * vm,
+                                unformat_input_t * input,
+                                vlib_cli_command_t * cmd)
+{
+  snat_main_t *sm = &snat_main;
+  unformat_input_t _line_input, *line_input = &_line_input;
+  clib_error_t *error = 0;
+
+  if (!unformat_user (input, unformat_line_input, line_input))
+    return clib_error_return (0, "'enable' or 'disable' expected");
+
+  while (unformat_check_input (line_input) != UNFORMAT_END_OF_INPUT)
+    {
+      if (unformat (line_input, "enable"))
+        {
+          sm->controlled = 1;
+        }
+      else if (unformat (line_input, "disable"))
+        {
+          sm->controlled = 0;
+        }
+      else
+        {
+          error = clib_error_return (0, "unknown input '%U'",
+                                     format_unformat_error, line_input);
+        }
+    }
+
+  return error;
+
+}
+
+static clib_error_t *
+nat_show_nat_bindings_command_fn (vlib_main_t * vm, unformat_input_t * input,
+                                   vlib_cli_command_t * cmd)
+{
+  snat_main_t *sm = &snat_main;
+  snat_main_per_thread_data_t *tsm = &sm->per_thread_data[0];
+  snat_binding_t *bn;
+
+  {
+    pool_foreach (bn, tsm->bindings)
+    {
+      vlib_cli_output (vm, "  FRAMED: %U", format_ip4_address,
+                       &bn->framed_addr);
+      vlib_cli_output (vm, "  EXTERNAL: %U", format_ip4_address,
+                       &bn->external_addr);
+      vlib_cli_output (vm, "  port start %u port end %u\n", bn->start_port,
+                       bn->end_port);
+    }
+  }
+  return NULL;
+}
+
 /*?
  * @cliexpar
  * @cliexstart{nat44}
@@ -2331,6 +2386,20 @@ VLIB_CLI_COMMAND (snat_forwarding_set_command, static) = {
   .short_help = "nat44 forwarding enable|disable",
   .function = snat_forwarding_set_command_fn,
 };
+
+/* *INDENT-OFF* */
+VLIB_CLI_COMMAND (nat_controlled_set_command, static) = {
+  .path = "nat44 controlled",
+  .short_help = "nat44 controlled enable|disable",
+  .function = nat_controlled_set_command_fn,
+};
+
+VLIB_CLI_COMMAND (nat_show_nat_bindings_command, static) = {
+  .path = "show nat44 bindings",
+  .short_help = "show nat44 bindings",
+  .function = nat_show_nat_bindings_command_fn,
+};
+/* *INDENT-ON* */
 
 /*
  * fd.io coding-style-patch-verification: ON

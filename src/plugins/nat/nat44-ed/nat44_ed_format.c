@@ -17,6 +17,34 @@
 #include <nat/nat44-ed/nat44_ed_inlines.h>
 
 u8 *
+format_binding_key (u8 * s, va_list * args)
+{
+  u64 key = va_arg (*args, u64);
+
+  ip4_address_t addr;
+  u16 s_port;
+  u16 e_port;
+
+  split_binding_key (key, &addr, &s_port, &e_port);
+
+  s = format (s, "%U start_port %d end_port %d",
+              format_ip4_address, &addr,
+              clib_net_to_host_u16 (s_port), clib_net_to_host_u16 (e_port));
+  return s;
+}
+
+u8 *
+format_binding_mapping_kvp (u8 * s, va_list * args)
+{
+  clib_bihash_kv_8_8_t *v = va_arg (*args, clib_bihash_kv_8_8_t *);
+
+  s = format (s, "%U binding-mapping-index %llu",
+              format_binding_key, v->key, v->value);
+
+  return s;
+}
+
+u8 *
 format_ed_session_kvp (u8 *s, va_list *args)
 {
   clib_bihash_kv_16_8_t *v = va_arg (*args, clib_bihash_kv_16_8_t *);

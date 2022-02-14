@@ -97,6 +97,62 @@ format_nat_in2out_ed_trace (u8 * s, va_list * args)
 }
 
 static int
+nat_controlled_alloc_addr_and_port (snat_main_t * sm,
+                                    u32 thread_index, u8 proto,
+                                    u32 snat_thread_index, snat_session_t * s,
+                                    ip4_address_t * outside_addr,
+                                    u16 * outside_port,
+                                    u32 buf_out_fib_index)
+{
+  snat_main_per_thread_data_t *tsm = &sm->per_thread_data[thread_index];
+  snat_binding_t *bn;
+  ip4_address_t ext_addr;
+  u16 start_port;
+  u16 end_port;
+  u16 attempts;
+
+  bn = nat_ed_get_binding (tsm, s->in2out.addr);
+
+  if (!bn)
+    {
+      return 1;
+    }
+
+  s->out2in.fib_index = buf_out_fib_index;
+  start_port = bn->start_port;
+  end_port = bn->end_port;
+  ext_addr.as_u32 = bn->external_addr.as_u32;
+  outside_addr->as_u32 = ext_addr.as_u32;
+
+  u16 port = clib_net_to_host_u16 (*outside_port);
+  if (port < start_port || port > end_port)
+    port = start_port;
+  attempts = end_port - start_port;
+  s->o2i.match.daddr.as_u32 = ext_addr.as_u32;
+  do
+    {
+      if (IP_PROTOCOL_ICMP == proto)
+        {
+          s->o2i.match.sport = clib_host_to_net_u16 (port);
+        }
+      s->o2i.match.dport = clib_host_to_net_u16 (port);
+      if (0 == nat_ed_ses_o2i_flow_hash_add_del (sm, thread_index, s, 2))
+        {
+          *outside_port = clib_host_to_net_u16 (port);
+          vec_add1 (bn->bound_sessions, s - tsm->sessions);
+          s->binding = bn;
+          return 0;
+        }
+      ++port;
+      --attempts;
+    }
+  while (attempts > 0);
+
+  /* Totally out of translations to use... */
+  return 1;
+}
+
+static int
 nat_ed_alloc_addr_and_port_with_snat_address (
   snat_main_t *sm, u8 proto, u32 thread_index, snat_address_t *a,
   u16 port_per_thread, u32 snat_thread_index, snat_session_t *s,
@@ -469,7 +525,7 @@ slow_path_ed (vlib_main_t *vm, snat_main_t *sm, vlib_buffer_t *b,
       is_sm = 1;
     }
 
-  if (PREDICT_TRUE (proto == IP_PROTOCOL_TCP))
+  if (PREDICT_TRUE (proto == IP_PROTOCOL_TCP) && !(sm->controlled))
     {
       if (PREDICT_FALSE (!tcp_flags_is_init (
 	    vnet_buffer (b)->ip.reass.icmp_type_or_tcp_flags)))
@@ -516,7 +572,22 @@ slow_path_ed (vlib_main_t *vm, snat_main_t *sm, vlib_buffer_t *b,
 	}
       nat_6t_flow_txfib_rewrite_set (&s->o2i, rx_fib_index);
 
-      if (nat_ed_alloc_addr_and_port (
+      if (sm->controlled)
+        {
+          if (nat_controlled_alloc_addr_and_port (sm, thread_index,  proto,
+                                                  tsm->snat_thread_index, s,
+                                                  &outside_addr,
+                                                  &outside_port,
+                                                  rx_fib_index))
+            {
+              nat_elog_notice (sm, "addresses exhausted");
+              b->error = node->errors[NAT_IN2OUT_ED_ERROR_OUT_OF_PORTS];
+              nat_ed_session_delete (sm, s, thread_index, 1);
+              return NAT_NEXT_DROP;
+            }
+	    sm->nat44_ed_controlled_report_src_port (b, outside_port);
+        }
+      else if (nat_ed_alloc_addr_and_port (
 	    sm, rx_fib_index, tx_sw_if_index, proto, thread_index, l_addr,
 	    r_addr, tsm->snat_thread_index, s, &outside_addr, &outside_port))
 	{
