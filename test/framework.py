@@ -458,11 +458,7 @@ class VppTestCase(CPUInterface, unittest.TestCase):
         cls.vpp_cmdline.extend(
             [
                 "}",
-                "physmem",
-                "{",
-                "max-size",
-                "32m",
-                "}",
+                "heapsize", "2G",
                 "statseg",
                 "{",
                 "socket-name",
