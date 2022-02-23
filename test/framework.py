@@ -451,7 +451,7 @@ class VppTestCase(CPUInterface, unittest.TestCase):
                 "corelist-workers", ",".join([str(x) for x in cls.cpus[1:]])])
         cls.vpp_cmdline.extend([
             "}",
-            "physmem", "{", "max-size", "32m", "}",
+            "heapsize", "2G",
             "statseg", "{", "socket-name", cls.get_stats_sock_path(),
             cls.extra_vpp_statseg_config, "}",
             "socksvr", "{", "socket-name", cls.get_api_sock_path(), "}",
