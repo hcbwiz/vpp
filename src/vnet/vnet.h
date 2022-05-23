@@ -50,6 +50,7 @@
 #include <vnet/config.h>
 #include <vnet/interface.h>
 #include <vnet/api_errno.h>
+#include <vpp/stats/stat_segment.h>
 
 /* ip table add delete callback */
 typedef struct _vnet_ip_table_function_list_elt

@@ -19,6 +19,7 @@
 #include <vlib/vlib.h>
 #include <vppinfra/socket.h>
 #include <vpp/stats/stat_segment_shared.h>
+#include <vnet/vnet.h>
 
 typedef enum
 {
@@ -119,5 +120,6 @@ void vlib_stats_register_symlink (void *oldheap, u8 *name, u32 index1,
 				  u32 index2, u8 lock);
 
 void stat_provider_register_vector_rate (u32 num_workers);
+clib_error_t * statseg_interface_rename (vnet_hw_interface_t *hw);
 
 #endif

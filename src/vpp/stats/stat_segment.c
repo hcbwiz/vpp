@@ -1009,6 +1009,48 @@ statseg_config (vlib_main_t * vm, unformat_input_t * input)
 
 VLIB_EARLY_CONFIG_FUNCTION (statseg_config, "statseg");
 
+clib_error_t *
+statseg_interface_rename (vnet_hw_interface_t *hw)
+{
+  u32 sw_if_index = hw->sw_if_index;
+  stat_segment_main_t *sm = &stat_segment_main;
+  stat_segment_directory_entry_t *ep;
+  void *oldheap = vlib_stats_push_heap (sm->interfaces);
+  u8 *s = 0;
+  u8 *symlink_new_name = 0;
+  u8 *symlink_name = 0;
+  u32 vector_index;
+
+  vlib_stat_segment_lock ();
+
+  s = format (s, "%v%c", hw->name, '\0');
+
+#define _(E, n, p)                                                      \
+  vec_reset_length (symlink_name);                                            \
+  symlink_name = format (symlink_name, "/interfaces/%U/" #n "%c",               \
+                         format_vlib_stats_symlink, sm->interfaces[sw_if_index], 0);  \
+  clib_mem_set_heap (oldheap); /* Exit stats segment */                       \
+  vector_index = lookup_hash_index ((u8 *) symlink_name);                     \
+  clib_mem_set_heap (sm->heap); /* Re-enter stat segment */                   \
+  vec_reset_length (symlink_new_name);                                        \
+  symlink_new_name = format (symlink_new_name, "/interfaces/%U/" #n "%c",       \
+                             format_vlib_stats_symlink, s, 0);                \
+  vlib_stats_rename_symlink (oldheap, vector_index, symlink_new_name);
+      foreach_simple_interface_counter_name
+        foreach_combined_interface_counter_name
+#undef _
+
+  vec_free (symlink_new_name);
+  vec_free (symlink_name);
+  sm->interfaces[sw_if_index] = s;
+  ep = &sm->directory_vector[STAT_COUNTER_INTERFACE_NAMES];
+  ep->data = sm->interfaces;
+
+  vlib_stat_segment_unlock ();
+  clib_mem_set_heap (oldheap);
+  return 0;
+}
+
 static clib_error_t *
 statseg_sw_interface_add_del (vnet_main_t * vnm, u32 sw_if_index, u32 is_add)
 {
