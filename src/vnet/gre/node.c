@@ -159,6 +159,8 @@ gre_input (vlib_main_t * vm,
       gre_tunnel_key_t key[2];
       u8 matched[2];
       u32 tun_sw_if_index[2];
+      u32 gre_key[2];
+      u8 is_keyed[2];
 
       if (PREDICT_TRUE (n_left_from >= 6))
 	{
@@ -175,8 +177,8 @@ gre_input (vlib_main_t * vm,
 	  ip6[1] = vlib_buffer_get_current (b[1]);
 	  gre[0] = (void *) (ip6[0] + 1);
 	  gre[1] = (void *) (ip6[1] + 1);
-	  vlib_buffer_advance (b[0], sizeof (*ip6[0]) + sizeof (*gre[0]));
-	  vlib_buffer_advance (b[1], sizeof (*ip6[0]) + sizeof (*gre[0]));
+	  vlib_buffer_advance (b[0], sizeof (*ip6[0]) + sizeof (*gre[0]) - sizeof (u32));
+	  vlib_buffer_advance (b[1], sizeof (*ip6[0]) + sizeof (*gre[0]) - sizeof (u32));
 	}
       else
 	{
@@ -185,8 +187,8 @@ gre_input (vlib_main_t * vm,
 	  ip4[1] = vlib_buffer_get_current (b[1]);
 	  gre[0] = (void *) (ip4[0] + 1);
 	  gre[1] = (void *) (ip4[1] + 1);
-	  vlib_buffer_advance (b[0], sizeof (*ip4[0]) + sizeof (*gre[0]));
-	  vlib_buffer_advance (b[1], sizeof (*ip4[0]) + sizeof (*gre[0]));
+	  vlib_buffer_advance (b[0], sizeof (*ip4[0]) + sizeof (*gre[0]) - sizeof (u32));
+	  vlib_buffer_advance (b[1], sizeof (*ip4[0]) + sizeof (*gre[0]) - sizeof (u32));
 	}
 
       if (PREDICT_TRUE (cached_protocol == gre[0]->protocol))
@@ -226,6 +228,32 @@ gre_input (vlib_main_t * vm,
 
       version[0] = clib_net_to_host_u16 (gre[0]->flags_and_version);
       version[1] = clib_net_to_host_u16 (gre[1]->flags_and_version);
+
+      /* Check if the KEY flag is present before clearing the flags */
+      if (version[0] & GRE_FLAGS_KEY)
+	{
+	  gre_key[0] = clib_net_to_host_u32 (gre[0]->key);
+	  is_keyed[0] = 1;
+	  vlib_buffer_advance (b[0], sizeof (u32));
+	}
+      else
+	{
+	  gre_key[0] = 0;
+	  is_keyed[0] = 0;
+	}
+
+      if (version[1] & GRE_FLAGS_KEY)
+	{
+          gre_key[1] = clib_net_to_host_u32 (gre[1]->key);
+	  is_keyed[1] = 1;
+	  vlib_buffer_advance (b[1], sizeof (u32));
+	}
+      else
+        {
+          gre_key[1] = 0;
+          is_keyed[1] = 0;
+        }
+
       version[0] &= GRE_VERSION_MASK;
       version[1] &= GRE_VERSION_MASK;
 
@@ -245,11 +273,11 @@ gre_input (vlib_main_t * vm,
 	  gre_mk_key6 (&ip6[0]->dst_address,
 		       &ip6[0]->src_address,
 		       vnet_buffer (b[0])->ip.fib_index,
-		       type[0], TUNNEL_MODE_P2P, 0, &key[0].gtk_v6);
+		       type[0], TUNNEL_MODE_P2P, 0, gre_key[0], &key[0].gtk_v6, is_keyed[0]);
 	  gre_mk_key6 (&ip6[1]->dst_address,
 		       &ip6[1]->src_address,
 		       vnet_buffer (b[1])->ip.fib_index,
-		       type[1], TUNNEL_MODE_P2P, 0, &key[1].gtk_v6);
+		       type[1], TUNNEL_MODE_P2P, 0, gre_key[1], &key[1].gtk_v6, is_keyed[1]);
 	  matched[0] = gre_match_key6 (&cached_key.gtk_v6, &key[0].gtk_v6);
 	  matched[1] = gre_match_key6 (&cached_key.gtk_v6, &key[1].gtk_v6);
 	}
@@ -258,11 +286,11 @@ gre_input (vlib_main_t * vm,
 	  gre_mk_key4 (ip4[0]->dst_address,
 		       ip4[0]->src_address,
 		       vnet_buffer (b[0])->ip.fib_index,
-		       type[0], TUNNEL_MODE_P2P, 0, &key[0].gtk_v4);
+		       type[0], TUNNEL_MODE_P2P, 0, gre_key[0], &key[0].gtk_v4, is_keyed[0]);
 	  gre_mk_key4 (ip4[1]->dst_address,
 		       ip4[1]->src_address,
 		       vnet_buffer (b[1])->ip.fib_index,
-		       type[1], TUNNEL_MODE_P2P, 0, &key[1].gtk_v4);
+		       type[1], TUNNEL_MODE_P2P, 0, gre_key[1], &key[1].gtk_v4, is_keyed[1]);
 	  matched[0] = gre_match_key4 (&cached_key.gtk_v4, &key[0].gtk_v4);
 	  matched[1] = gre_match_key4 (&cached_key.gtk_v4, &key[1].gtk_v4);
 	}
@@ -329,6 +357,8 @@ gre_input (vlib_main_t * vm,
       gre_tunnel_key_t key[1];
       u8 matched[1];
       u32 tun_sw_if_index[1];
+      u32 gre_key[1];
+      u8 is_keyed[1];
 
       if (PREDICT_TRUE (n_left_from >= 3))
 	{
@@ -341,14 +371,14 @@ gre_input (vlib_main_t * vm,
 	  /* ip6_local hands us the ip header, not the gre header */
 	  ip6[0] = vlib_buffer_get_current (b[0]);
 	  gre[0] = (void *) (ip6[0] + 1);
-	  vlib_buffer_advance (b[0], sizeof (*ip6[0]) + sizeof (*gre[0]));
+	  vlib_buffer_advance (b[0], sizeof (*ip6[0]) + sizeof (*gre[0]) - sizeof (u32));
 	}
       else
 	{
 	  /* ip4_local hands us the ip header, not the gre header */
 	  ip4[0] = vlib_buffer_get_current (b[0]);
 	  gre[0] = (void *) (ip4[0] + 1);
-	  vlib_buffer_advance (b[0], sizeof (*ip4[0]) + sizeof (*gre[0]));
+	  vlib_buffer_advance (b[0], sizeof (*ip4[0]) + sizeof (*gre[0]) - sizeof (u32));
 	}
 
       if (PREDICT_TRUE (cached_protocol == gre[0]->protocol))
@@ -371,6 +401,19 @@ gre_input (vlib_main_t * vm,
 	: node->errors[GRE_ERROR_NONE];
 
       version[0] = clib_net_to_host_u16 (gre[0]->flags_and_version);
+
+      if (version[0] & GRE_FLAGS_KEY)
+	{
+	  gre_key[0] = clib_net_to_host_u32 (gre[0]->key);
+	  is_keyed[0] = 1;
+	  vlib_buffer_advance (b[0], sizeof (u32));
+	}
+      else
+        {
+          gre_key[0] = 0;
+          is_keyed[0] = 0;
+        }
+
       version[0] &= GRE_VERSION_MASK;
 
       b[0]->error = version[0]
@@ -384,7 +427,7 @@ gre_input (vlib_main_t * vm,
 	  gre_mk_key6 (&ip6[0]->dst_address,
 		       &ip6[0]->src_address,
 		       vnet_buffer (b[0])->ip.fib_index,
-		       type[0], TUNNEL_MODE_P2P, 0, &key[0].gtk_v6);
+		       type[0], TUNNEL_MODE_P2P, 0, gre_key[0], &key[0].gtk_v6, is_keyed[0]);
 	  matched[0] = gre_match_key6 (&cached_key.gtk_v6, &key[0].gtk_v6);
 	}
       else
@@ -392,7 +435,7 @@ gre_input (vlib_main_t * vm,
 	  gre_mk_key4 (ip4[0]->dst_address,
 		       ip4[0]->src_address,
 		       vnet_buffer (b[0])->ip.fib_index,
-		       type[0], TUNNEL_MODE_P2P, 0, &key[0].gtk_v4);
+		       type[0], TUNNEL_MODE_P2P, 0, gre_key[0], &key[0].gtk_v4, is_keyed[0]);
 	  matched[0] = gre_match_key4 (&cached_key.gtk_v4, &key[0].gtk_v4);
 	}
 

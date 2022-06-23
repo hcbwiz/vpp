@@ -50,6 +50,8 @@ typedef gre_tunnel
   u16 session_id;
   u32 instance;
   u32 outer_table_id;
+  u32 key;
+  u8 capabilities;
   vl_api_interface_index_t sw_if_index;
   vl_api_address_t src;
   vl_api_address_t dst;

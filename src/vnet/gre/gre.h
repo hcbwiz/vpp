@@ -26,6 +26,8 @@
 #include <vnet/tunnel/tunnel.h>
 #include <vnet/teib/teib.h>
 
+#define GRE_TUNNEL_KEYED	1
+
 extern vnet_hw_interface_class_t gre_hw_interface_class;
 extern vnet_hw_interface_class_t mgre_hw_interface_class;
 
@@ -62,7 +64,6 @@ typedef enum gre_tunnel_type_t_
 
 extern u8 *format_gre_tunnel_type (u8 * s, va_list * args);
 
-
 /**
  * A GRE payload protocol registration
  */
@@ -95,14 +96,16 @@ typedef struct gre_tunnel_key_common_t_
     {
       u32 fib_index;
       u16 session_id;
-      gre_tunnel_type_t type;
       tunnel_mode_t mode;
+      u8 type:7;
+      u8 is_keyed:1;
     };
     u64 as_u64;
   };
-} gre_tunnel_key_common_t;
+  u32 gre_key;
+} __attribute__ ((packed)) gre_tunnel_key_common_t;
 
-STATIC_ASSERT_SIZEOF (gre_tunnel_key_common_t, sizeof (u64));
+STATIC_ASSERT_SIZEOF (gre_tunnel_key_common_t, sizeof (u64)  + sizeof (u32));
 
 /**
  * @brief Key for a IPv4 GRE Tunnel
@@ -126,7 +129,7 @@ typedef struct gre_tunnel_key4_t_
   gre_tunnel_key_common_t gtk_common;
 } __attribute__ ((packed)) gre_tunnel_key4_t;
 
-STATIC_ASSERT_SIZEOF (gre_tunnel_key4_t, 2 * sizeof (u64));
+STATIC_ASSERT_SIZEOF (gre_tunnel_key4_t, 2 * sizeof (u64) + sizeof (u32));
 
 /**
  * @brief Key for a IPv6 GRE Tunnel
@@ -144,7 +147,7 @@ typedef struct gre_tunnel_key6_t_
   gre_tunnel_key_common_t gtk_common;
 } __attribute__ ((packed)) gre_tunnel_key6_t;
 
-STATIC_ASSERT_SIZEOF (gre_tunnel_key6_t, 5 * sizeof (u64));
+STATIC_ASSERT_SIZEOF (gre_tunnel_key6_t, 5 * sizeof (u64) + sizeof (u32));
 
 /**
  * Union of the two possible key types
@@ -177,6 +180,7 @@ typedef struct
   ip46_address_t src;
   ip46_address_t dst;
   u32 fib_index;
+  u32 gre_key;
 } gre_sn_key_t;
 
 /**
@@ -228,6 +232,8 @@ typedef struct
 
   u32 dev_instance;		/* Real device instance in tunnel vector */
   u32 user_instance;		/* Instance name being shown to user */
+  u32 gre_key;
+  u8 capability_flags;
 } gre_tunnel_t;
 
 typedef struct
@@ -372,6 +378,8 @@ typedef struct
   u32 outer_table_id;
   u16 session_id;
   tunnel_encap_decap_flags_t flags;
+  u32 gre_key;
+  u8 capabilities;
 } vnet_gre_tunnel_add_del_args_t;
 
 extern int vnet_gre_tunnel_add_del (vnet_gre_tunnel_add_del_args_t * a,
@@ -382,14 +390,18 @@ gre_mk_key4 (ip4_address_t src,
 	     ip4_address_t dst,
 	     u32 fib_index,
 	     gre_tunnel_type_t ttype,
-	     tunnel_mode_t tmode, u16 session_id, gre_tunnel_key4_t * key)
+	     tunnel_mode_t tmode, u16 session_id,
+	     u32 gre_key, gre_tunnel_key4_t * key,
+	     u8 is_keyed)
 {
   key->gtk_src = src;
   key->gtk_dst = dst;
+  key->gtk_common.gre_key = gre_key;
   key->gtk_common.type = ttype;
   key->gtk_common.mode = tmode;
   key->gtk_common.fib_index = fib_index;
   key->gtk_common.session_id = session_id;
+  key->gtk_common.is_keyed = is_keyed;
 }
 
 static inline int
@@ -397,7 +409,8 @@ gre_match_key4 (const gre_tunnel_key4_t * key1,
 		const gre_tunnel_key4_t * key2)
 {
   return ((key1->gtk_as_u64 == key2->gtk_as_u64) &&
-	  (key1->gtk_common.as_u64 == key2->gtk_common.as_u64));
+	  (key1->gtk_common.as_u64 == key2->gtk_common.as_u64) &&
+	  (key1->gtk_common.gre_key == key2->gtk_common.gre_key));
 }
 
 static inline void
@@ -405,14 +418,18 @@ gre_mk_key6 (const ip6_address_t * src,
 	     const ip6_address_t * dst,
 	     u32 fib_index,
 	     gre_tunnel_type_t ttype,
-	     tunnel_mode_t tmode, u16 session_id, gre_tunnel_key6_t * key)
+	     tunnel_mode_t tmode, u16 session_id,
+	     u32 gre_key, gre_tunnel_key6_t * key,
+	     u8 is_keyed)
 {
   key->gtk_src = *src;
   key->gtk_dst = *dst;
+  key->gtk_common.gre_key = gre_key;
   key->gtk_common.type = ttype;
   key->gtk_common.mode = tmode;
   key->gtk_common.fib_index = fib_index;
   key->gtk_common.session_id = session_id;
+  key->gtk_common.is_keyed = is_keyed;
 }
 
 static inline int
@@ -421,7 +438,8 @@ gre_match_key6 (const gre_tunnel_key6_t * key1,
 {
   return (ip6_address_is_equal (&key1->gtk_src, &key2->gtk_src) &&
 	  ip6_address_is_equal (&key1->gtk_dst, &key2->gtk_dst) &&
-	  (key1->gtk_common.as_u64 == key2->gtk_common.as_u64));
+	  (key1->gtk_common.as_u64 == key2->gtk_common.as_u64) &&
+	  (key1->gtk_common.gre_key == key2->gtk_common.gre_key));
 }
 
 static inline void

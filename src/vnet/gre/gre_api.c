@@ -114,6 +114,8 @@ static void vl_api_gre_tunnel_add_del_t_handler
   a->session_id = ntohs (mp->tunnel.session_id);
   a->outer_table_id = ntohl (mp->tunnel.outer_table_id);
   a->flags = flags;
+  a->gre_key = clib_net_to_host_u32 (mp->tunnel.key);
+  a->capabilities = mp->tunnel.capabilities;
 
   rv = vnet_gre_tunnel_add_del (a, &sw_if_index);
 
@@ -147,6 +149,8 @@ static void send_gre_tunnel_details
     rmp->tunnel.instance = htonl (t->user_instance);
     rmp->tunnel.sw_if_index = htonl (t->sw_if_index);
     rmp->tunnel.session_id = htons (t->session_id);
+    rmp->tunnel.key = clib_host_to_net_u32 (t->gre_key);
+    rmp->tunnel.capabilities = t->capability_flags;
   }));
   /* *INDENT-ON* */
 }
