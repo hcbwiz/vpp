@@ -47,11 +47,11 @@ format_gre_tunnel (u8 * s, va_list * args)
 {
   gre_tunnel_t *t = va_arg (*args, gre_tunnel_t *);
 
-  s = format (s, "[%d] instance %d src %U dst %U fib-idx %d sw-if-idx %d ",
+  s = format (s, "[%d] instance %d src %U dst %U fib-idx %d sw-if-idx %d key %d ",
 	      t->dev_instance, t->user_instance,
 	      format_ip46_address, &t->tunnel_src, IP46_TYPE_ANY,
 	      format_ip46_address, &t->tunnel_dst.fp_addr, IP46_TYPE_ANY,
-	      t->outer_fib_index, t->sw_if_index);
+	      t->outer_fib_index, t->sw_if_index, ((t->capability_flags & GRE_TUNNEL_KEYED) ? t->gre_key : -1));
 
   s = format (s, "payload %U ", format_gre_tunnel_type, t->type);
   s = format (s, "%U ", format_tunnel_mode, t->mode);
@@ -75,13 +75,13 @@ gre_tunnel_db_find (const vnet_gre_tunnel_add_del_args_t * a,
   if (!a->is_ipv6)
     {
       gre_mk_key4 (a->src.ip4, a->dst.ip4, outer_fib_index,
-		   a->type, a->mode, a->session_id, &key->gtk_v4);
+		   a->type, a->mode, a->session_id, a->gre_key, &key->gtk_v4, (a->capabilities & GRE_TUNNEL_KEYED));
       p = hash_get_mem (gm->tunnel_by_key4, &key->gtk_v4);
     }
   else
     {
       gre_mk_key6 (&a->src.ip6, &a->dst.ip6, outer_fib_index,
-		   a->type, a->mode, a->session_id, &key->gtk_v6);
+		   a->type, a->mode, a->session_id, a->gre_key, &key->gtk_v6, (a->capabilities & GRE_TUNNEL_KEYED));
       p = hash_get_mem (gm->tunnel_by_key6, &key->gtk_v6);
     }
 
@@ -247,12 +247,12 @@ gre_teib_mk_key (const gre_tunnel_t * t,
     gre_mk_key4 (t->tunnel_src.ip4,
 		 nh->fp_addr.ip4,
 		 teib_entry_get_fib_index (ne),
-		 t->type, TUNNEL_MODE_P2P, 0, &key->gtk_v4);
+		 t->type, TUNNEL_MODE_P2P, 0, t->gre_key, &key->gtk_v4, (t->capability_flags & GRE_TUNNEL_KEYED));
   else
     gre_mk_key6 (&t->tunnel_src.ip6,
 		 &nh->fp_addr.ip6,
 		 teib_entry_get_fib_index (ne),
-		 t->type, TUNNEL_MODE_P2P, 0, &key->gtk_v6);
+		 t->type, TUNNEL_MODE_P2P, 0, t->gre_key, &key->gtk_v6, (t->capability_flags & GRE_TUNNEL_KEYED));
 }
 
 /**
@@ -398,6 +398,9 @@ vnet_gre_tunnel_add (vnet_gre_tunnel_add_del_args_t * a,
   t->type = a->type;
   t->mode = a->mode;
   t->flags = a->flags;
+  t->capability_flags = a->capabilities;
+  if (t->capability_flags & GRE_TUNNEL_KEYED)
+    t->gre_key = a->gre_key;
   if (t->type == GRE_TUNNEL_TYPE_ERSPAN)
     t->session_id = a->session_id;
 
@@ -446,15 +449,14 @@ vnet_gre_tunnel_add (vnet_gre_tunnel_add_del_args_t * a,
   gm->tunnel_index_by_sw_if_index[sw_if_index] = t_idx;
 
   if (!is_ipv6)
-    {
-      hi->frame_overhead = sizeof (gre_header_t) + sizeof (ip4_header_t);
-      hi->min_frame_size = hi->frame_overhead + 64;
-    }
+    hi->frame_overhead = sizeof (gre_header_t) - sizeof (u32) + sizeof (ip4_header_t);
   else
-    {
-      hi->frame_overhead = sizeof (gre_header_t) + sizeof (ip6_header_t);
-      hi->min_frame_size = hi->frame_overhead + 64;
-    }
+    hi->frame_overhead = sizeof (gre_header_t) - sizeof (u32) + sizeof (ip6_header_t);
+
+  if (t->capability_flags & GRE_TUNNEL_KEYED)
+    hi->frame_overhead += sizeof (u32);
+
+  hi->min_frame_size = hi->frame_overhead + 64;
 
   /* Standard default gre MTU. */
   vnet_sw_interface_set_mtu (vnm, sw_if_index, 9000);
@@ -653,6 +655,8 @@ create_gre_tunnel_command_fn (vlib_main_t * vm,
   int rv;
   u8 is_add = 1;
   u32 sw_if_index;
+  u32 key = 0;
+  u8 caps = 0;
   clib_error_t *error = NULL;
 
   /* Get a line of input. */
@@ -671,6 +675,8 @@ create_gre_tunnel_command_fn (vlib_main_t * vm,
 	;
       else if (unformat (line_input, "outer-table-id %d", &outer_table_id))
 	;
+     else if (unformat (line_input, "key %d", &key))
+        caps = GRE_TUNNEL_KEYED;
       else if (unformat (line_input, "multipoint"))
 	t_mode = TUNNEL_MODE_MP;
       else if (unformat (line_input, "teb"))
@@ -724,6 +730,8 @@ create_gre_tunnel_command_fn (vlib_main_t * vm,
   a->is_ipv6 = !ip46_address_is_ip4 (&src);
   a->instance = instance;
   a->flags = flags;
+  a->gre_key = key;
+  a->capabilities = caps;
   clib_memcpy (&a->src, &src, sizeof (a->src));
   clib_memcpy (&a->dst, &dst, sizeof (a->dst));
 

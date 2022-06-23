@@ -34,7 +34,7 @@ typedef enum
 #undef _
 } gre_protocol_t;
 
-typedef struct
+typedef CLIB_PACKED (struct
 {
   /* flags and version */
   u16 flags_and_version;
@@ -53,7 +53,8 @@ typedef struct
 
   /* 0x800 for ip4, etc. */
   u16 protocol;
-} gre_header_t;
+  u32 key;
+}) gre_header_t;
 
 /* From draft-foschiano-erspan-03.txt
 
