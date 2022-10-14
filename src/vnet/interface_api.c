@@ -336,7 +336,8 @@ send_sw_interface_details (vpe_api_main_t * am,
 
   u8 *tag = vnet_get_sw_interface_tag (vnet_get_main (), swif->sw_if_index);
   if (tag)
-    strncpy ((char *) mp->tag, (char *) tag, ARRAY_LEN (mp->tag) - 1);
+    memcpy ((char *) mp->tag, (char *) tag,
+            clib_min(ARRAY_LEN (mp->tag) - 1, vec_len (tag)));
 
   vl_api_send_msg (rp, (u8 *) mp);
 }
