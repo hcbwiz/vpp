@@ -149,6 +149,7 @@ add_vpp_library(vlib
   unix/unix.h
   vlib.h
   vmbus/vmbus.h
+  dma/dma.h
 
   API_FILES
   pci/pci_types.api
