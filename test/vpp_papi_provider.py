@@ -8,6 +8,7 @@
 import os
 import time
 import queue
+import socket
 from six import moves, iteritems
 from config import config
 from vpp_papi import VPPApiClient
