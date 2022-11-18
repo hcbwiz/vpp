@@ -2313,7 +2313,7 @@ nat_init (vlib_main_t * vm)
 
   nat44_set_node_indexes (sm, vm);
 
-  sm->log_class = vlib_log_register_class ("nat", 0);
+  sm->log_class = vlib_log_register_class_rate_limit ("nat", 0, 1);
   nat_ipfix_logging_init (vm);
 
   nat_init_simple_counter (sm->total_sessions, "total-sessions",
