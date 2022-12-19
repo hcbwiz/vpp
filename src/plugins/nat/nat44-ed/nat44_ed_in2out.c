@@ -149,6 +149,9 @@ nat_controlled_alloc_addr_and_port (snat_main_t * sm,
   while (attempts > 0);
 
   /* Totally out of translations to use... */
+  nat_log_warn ("Out of ports for binding %U:%u-%u",
+		format_ip4_address, &bn->external_addr,
+		bn->start_port, bn->end_port);
   return 1;
 }
 
@@ -503,7 +506,7 @@ slow_path_ed (vlib_main_t *vm, snat_main_t *sm, vlib_buffer_t *b,
 	  b->error = node->errors[NAT_IN2OUT_ED_ERROR_MAX_SESSIONS_EXCEEDED];
 	  nat_ipfix_logging_max_sessions (thread_index,
 					  sm->max_translations_per_thread);
-	  nat_elog_notice (sm, "maximum sessions exceeded");
+	  nat_log_warn ("maximum sessions exceeded");
 	  return NAT_NEXT_DROP;
 	}
     }
