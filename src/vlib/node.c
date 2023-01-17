@@ -85,6 +85,7 @@ vlib_node_rename (vlib_main_t * vm, u32 node_index, char *fmt, ...)
   n->name = va_format (0, fmt, &va);
   va_end (va);
   hash_set (nm->node_by_name, n->name, n->index);
+  vlib_rename_errors (vm, node_index);
 
   node_set_elog_name (vm, node_index);
 
