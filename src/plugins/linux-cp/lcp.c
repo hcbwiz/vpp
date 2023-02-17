@@ -19,6 +19,8 @@
 #include <sys/socket.h>
 #include <net/if.h>
 
+#include <vppinfra/linux/netns.h>
+
 #include <plugins/linux-cp/lcp.h>
 #include <plugins/linux-cp/lcp_interface.h>
 
@@ -52,7 +54,6 @@ lcp_set_default_ns (u8 *ns)
   lcp_main_t *lcpm = &lcp_main;
   char *p;
   int len;
-  u8 *s;
 
   p = (char *) ns;
   len = clib_strnlen (p, LCP_NS_LEN);
@@ -61,7 +62,7 @@ lcp_set_default_ns (u8 *ns)
 
   if (!p || *p == 0)
     {
-      lcpm->default_namespace = NULL;
+      vec_free (lcpm->default_namespace);
       if (lcpm->default_ns_fd > 0)
 	close (lcpm->default_ns_fd);
       lcpm->default_ns_fd = 0;
@@ -69,10 +70,8 @@ lcp_set_default_ns (u8 *ns)
     }
 
   vec_validate_init_c_string (lcpm->default_namespace, p,
-			      clib_strnlen (p, LCP_NS_LEN));
-  s = format (0, "/var/run/netns/%s%c", (char *) lcpm->default_namespace, 0);
-  lcpm->default_ns_fd = open ((char *) s, O_RDONLY);
-  vec_free (s);
+                              clib_strnlen (p, LCP_NS_LEN));
+  lcpm->default_ns_fd = clib_netns_open (lcpm->default_namespace);
 
   return 0;
 }
