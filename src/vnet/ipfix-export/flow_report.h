@@ -151,7 +151,7 @@ typedef struct flow_report
 /*
  * The maximum number of ipfix exporters we can have at once
  */
-#define IPFIX_EXPORTERS_MAX 5
+#define IPFIX_EXPORTERS_MAX 64
 
 /*
  * We support multiple exporters. Each one has its own configured
