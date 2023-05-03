@@ -570,7 +570,7 @@ vl_msg_api_process_file (vlib_main_t * vm, u8 * filename,
 	    }
 	  if (m)
 	    {
-	      m->endian_handler (tmpbuf + sizeof (uword));
+	      m->endian_handler (tmpbuf + sizeof (uword), false);
 	    }
 	}
 
@@ -707,7 +707,7 @@ vl_msg_print_trace (u8 *msg, void *ctx)
       clib_memcpy_fast (tmpbuf, msg, msg_length);
       msg = tmpbuf;
 
-      m->endian_handler (tmpbuf);
+      m->endian_handler (tmpbuf, false);
     }
 
   handler = is_json ? m->print_json_handler : m->print_handler;
@@ -860,7 +860,7 @@ vl_msg_exec_json_command (vlib_main_t *vm, cJSON *o)
 	}
 
       if (clib_arch_is_little_endian)
-	m->endian_handler (msg);
+	m->endian_handler (msg, false);
 
       if (!m->handler)
 	{

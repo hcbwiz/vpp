@@ -1145,8 +1145,29 @@ ENDIAN_STRINGS = {
     "f64": "clib_net_to_host_f64",
 }
 
+def dynamic_array_len(o, block, host_to_net_var=False):
+    prefix = ""
+    if host_to_net_var:
+        prefix = f"{host_to_net_var} ? a->{o.lengthfield} : "
+    m = list(
+        filter(lambda x: x.fieldname == o.lengthfield, block)
+    )
+    if len(m) != 1:
+        raise Exception(
+            f"Expected 1 match for field '{o.lengthfield}', got '{m}'"
+        )
+    lf = m[0]
+    if lf.fieldtype in ENDIAN_STRINGS:
+        return f"{prefix}{ENDIAN_STRINGS[lf.fieldtype]}(a->{o.lengthfield})", True
+    elif lf.fieldtype == "u8":
+        return f"a->{o.lengthfield}", False
+    else:
+        raise Exception(
+            f"Don't know how to endian swap {lf.fieldtype}"
+        )
 
-def endianfun_array(o):
+
+def endianfun_array(o, block):
     """Generate endian functions for arrays"""
     forloop = """\
     for (i = 0; i < {length}; i++) {{
@@ -1156,34 +1177,45 @@ def endianfun_array(o):
 
     forloop_format = """\
     for (i = 0; i < {length}; i++) {{
-        {type}_endian(&a->{name}[i]);
+        {type}_endian(&a->{name}[i], host_to_net);
     }}
+"""
+
+    len_var = """\
+    int len = {length};
 """
 
     output = ""
     if o.fieldtype == "u8" or o.fieldtype == "string" or o.fieldtype == "bool":
         output += "    /* a->{n} = a->{n} (no-op) */\n".format(n=o.fieldname)
     else:
-        lfield = "a->" + o.lengthfield if o.lengthfield else o.length
+        if not o.lengthfield:
+            len_str = o.length
+        else:
+            # TBD: use extra temp var
+            len_str, need_var = dynamic_array_len(o, block, "host_to_net")
+            if need_var:
+                output += len_var.format(length=len_str)
+                len_str = "len"
         if o.fieldtype in ENDIAN_STRINGS:
             output += forloop.format(
-                length=lfield, format=ENDIAN_STRINGS[o.fieldtype], name=o.fieldname
+                length=len_str, format=ENDIAN_STRINGS[o.fieldtype], name=o.fieldname
             )
         else:
             output += forloop_format.format(
-                length=lfield, type=o.fieldtype, name=o.fieldname
+                length=len_str, type=o.fieldtype, name=o.fieldname
             )
     return output
 
 
-NO_ENDIAN_CONVERSION = {"client_index": None}
+NO_ENDIAN_CONVERSION = set(["client_index"])
 
 
-def endianfun_obj(o):
+def endianfun_obj(o, block):
     """Generate endian conversion function for type"""
     output = ""
     if o.type == "Array":
-        return endianfun_array(o)
+        return endianfun_array(o, block)
     if o.type != "Field":
         output += '    s = format(s, "\\n{} {} {} (print not implemented");\n'.format(
             o.type, o.fieldtype, o.fieldname
@@ -1197,7 +1229,7 @@ def endianfun_obj(o):
             name=o.fieldname, format=ENDIAN_STRINGS[o.fieldtype]
         )
     elif o.fieldtype.startswith("vl_api_"):
-        output += "    {type}_endian(&a->{name});\n".format(
+        output += "    {type}_endian(&a->{name}, host_to_net);\n".format(
             type=o.fieldtype, name=o.fieldname
         )
     else:
@@ -1226,7 +1258,7 @@ def endianfun(objs, modulename):
     output = output.format(module=modulename)
 
     signature = """\
-static inline void vl_api_{name}_t_endian (vl_api_{name}_t *a)
+static inline void vl_api_{name}_t_endian (vl_api_{name}_t *a, bool host_to_net)
 {{
     int i __attribute__((unused));
 """
@@ -1265,11 +1297,11 @@ static inline void vl_api_{name}_t_endian (vl_api_{name}_t *a)
 
         # make Array type appear before the others:
         # some arrays have dynamic length, and we want to iterate over
-        # them before changing endiann for the length field
+        # them before changing endian for the length field
         t.block.sort(key=lambda x: x.type)
 
         for o in t.block:
-            output += endianfun_obj(o)
+            output += endianfun_obj(o, t.block)
         output += "}\n\n"
 
     output += "\n#endif"
@@ -1326,24 +1358,10 @@ static inline uword vl_api_{name}_t_calc_size (vl_api_{name}_t *a)
                         output += f" + {b.fieldtype}_calc_size(&a->{b.fieldname})"
                 elif b.type == "Array":
                     if b.lengthfield:
-                        m = list(
-                            filter(lambda x: x.fieldname == b.lengthfield, o.block)
+                        len_str, _ = dynamic_array_len(b, o.block)
+                        output += (
+                            f" + {len_str} * sizeof(a->{b.fieldname}[0])"
                         )
-                        if len(m) != 1:
-                            raise Exception(
-                                f"Expected 1 match for field '{b.lengthfield}', got '{m}'"
-                            )
-                        lf = m[0]
-                        if lf.fieldtype in ENDIAN_STRINGS:
-                            output += f" + {ENDIAN_STRINGS[lf.fieldtype]}(a->{b.lengthfield}) * sizeof(a->{b.fieldname}[0])"
-                        elif lf.fieldtype == "u8":
-                            output += (
-                                f" + a->{b.lengthfield} * sizeof(a->{b.fieldname}[0])"
-                            )
-                        else:
-                            raise Exception(
-                                f"Don't know how to endian swap {lf.fieldtype}"
-                            )
                     else:
                         # Fixed length strings decay to nul terminated u8
                         if b.fieldtype == "string":
@@ -1814,7 +1832,7 @@ api_{n} (cJSON *o)
   }}
 
   mp->_vl_msg_id = vac_get_msg_index(VL_API_{N}_CRC);
-  vl_api_{n}_t_endian(mp);
+  vl_api_{n}_t_endian(mp, true);
   vac_write((char *)mp, len);
   cJSON_free(mp);
 
@@ -1829,7 +1847,7 @@ api_{n} (cJSON *o)
     return 0;
   }}
   vl_api_{r}_t *rmp = (vl_api_{r}_t *)p;
-  vl_api_{r}_t_endian(rmp);
+  vl_api_{r}_t_endian(rmp, false);
   return vl_api_{r}_t_tojson(rmp);
 }}
 
@@ -1847,7 +1865,7 @@ api_{n} (cJSON *o)
       return 0;
   }}
   mp->_vl_msg_id = msg_id;
-  vl_api_{n}_t_endian(mp);
+  vl_api_{n}_t_endian(mp, true);
   vac_write((char *)mp, len);
   cJSON_free(mp);
 
@@ -1881,7 +1899,7 @@ api_{n} (cJSON *o)
             return 0;
         }}
         vl_api_{r}_t *rmp = (vl_api_{r}_t *)p;
-        vl_api_{r}_t_endian(rmp);
+        vl_api_{r}_t_endian(rmp, false);
         cJSON_AddItemToArray(reply, vl_api_{r}_t_tojson(rmp));
     }}
   }}
@@ -1903,7 +1921,7 @@ api_{n} (cJSON *o)
   }}
   mp->_vl_msg_id = msg_id;
 
-  vl_api_{n}_t_endian(mp);
+  vl_api_{n}_t_endian(mp, true);
   vac_write((char *)mp, len);
   cJSON_free(mp);
 
@@ -1924,14 +1942,14 @@ api_{n} (cJSON *o)
     u16 msg_id = ntohs(*((u16 *)p));
     if (msg_id == reply_msg_id) {{
         vl_api_{r}_t *rmp = (vl_api_{r}_t *)p;
-        vl_api_{r}_t_endian(rmp);
+        vl_api_{r}_t_endian(rmp, false);
         cJSON_AddItemToArray(reply, vl_api_{r}_t_tojson(rmp));
         break;
     }}
 
     if (msg_id == details_msg_id) {{
         vl_api_{d}_t *rmp = (vl_api_{d}_t *)p;
-        vl_api_{d}_t_endian(rmp);
+        vl_api_{d}_t_endian(rmp, false);
         cJSON_AddItemToArray(reply, vl_api_{d}_t_tojson(rmp));
     }}
   }}

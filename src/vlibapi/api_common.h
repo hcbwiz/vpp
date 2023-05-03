@@ -241,7 +241,7 @@ typedef struct
   void *(*fromjson_handler) (cJSON *, int *);
 
   /** Message endian handler vector */
-  void (*endian_handler) (void *);
+  void (*endian_handler) (void *, bool);
 
   /** Message print function vector */
   void (*print_handler) (void *, void *);
@@ -256,7 +256,7 @@ typedef struct
   int trace_size;
 
   /** Flags */
-  u8 bounce : 1;	 /**> Don't automatically free message buffer vetor */
+  u8 bounce : 1;	 /**> Don't automatically free message buffer vector */
   u8 is_mp_safe : 1;	 /**< Message is mp safe vector */
   u8 is_autoendian : 1;	 /**< Message requires us to do endian conversion */
   u8 trace_enable : 1;	 /**< trace this message  */

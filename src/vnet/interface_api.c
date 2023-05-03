@@ -1215,7 +1215,7 @@ out:
 static void
 send_interface_tx_placement_details (vnet_hw_if_tx_queue_t **all_queues,
 				     u32 index, vl_api_registration_t *rp,
-				     u32 native_context)
+				     u32 context)
 {
   vnet_main_t *vnm = vnet_get_main ();
   vl_api_sw_interface_tx_placement_details_t *rmp;
@@ -1224,7 +1224,6 @@ send_interface_tx_placement_details (vnet_hw_if_tx_queue_t **all_queues,
   uword *bitmap = q[0]->threads;
   u32 hw_if_index = q[0]->hw_if_index;
   vnet_hw_interface_t *hw_if = vnet_get_hw_interface (vnm, hw_if_index);
-  u32 context = clib_host_to_net_u32 (native_context);
 
   n_bits = clib_bitmap_count_set_bits (bitmap);
   u32 n = n_bits * sizeof (u32);
@@ -1352,7 +1351,7 @@ vl_api_sw_interface_set_tx_placement_t_handler (
       break;
     case VNET_API_ERROR_INVALID_QUEUE:
       error = clib_error_return (
-	0, "unknown queue %u on interface %s", queue_id,
+	0, "unknown queue %u on interface %v", queue_id,
 	vnet_get_hw_interface (vnet_get_main (), si->hw_if_index)->name);
       break;
     default:
