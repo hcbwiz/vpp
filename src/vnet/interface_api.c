@@ -1227,6 +1227,7 @@ send_interface_tx_placement_details (vnet_hw_if_tx_queue_t **all_queues,
   n_bits = clib_bitmap_count_set_bits (bitmap);
   u32 n = n_bits * sizeof (u32);
 
+  context = clib_host_to_net_u32 (context);
   /*
    * FIXME: Use the REPLY_MACRO_DETAILS5_END once endian handler is registered
    * and available.
