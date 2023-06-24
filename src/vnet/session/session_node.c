@@ -1125,8 +1125,8 @@ session_tx_fill_buffer (session_worker_t *wrk, session_tx_context_t *ctx,
 
 	  if (transport_connection_is_cless (ctx->tc))
 	    {
-	      ip_copy (&ctx->tc->rmt_ip, &hdr->rmt_ip, ctx->tc->is_ip4);
-	      ctx->tc->rmt_port = hdr->rmt_port;
+	      clib_memcpy_fast (data0 - sizeof (session_dgram_hdr_t), hdr,
+				sizeof (*hdr));
 	    }
 	  hdr->data_offset += n_bytes_read;
 	  if (hdr->data_offset == hdr->data_length)
