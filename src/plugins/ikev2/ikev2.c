@@ -34,6 +34,9 @@
 #define IKEV2_LIVENESS_RETRIES 3
 #define IKEV2_LIVENESS_PERIOD_CHECK 30
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 ikev2_main_t ikev2_main;
 
 static int ikev2_delete_tunnel_interface (vnet_main_t * vnm,
@@ -5371,6 +5374,8 @@ VLIB_PLUGIN_REGISTER () = {
     .version = VPP_BUILD_VER,
     .description = "Internet Key Exchange (IKEv2) Protocol",
 };
+
+#pragma GCC diagnostic pop
 /* *INDENT-ON* */
 
 /*

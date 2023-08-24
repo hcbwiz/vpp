@@ -23,6 +23,9 @@
 #define SSL_ASYNC_REENTER     3
 #define MAX_VECTOR_ASYNC    256
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 typedef struct openssl_tls_callback_arg_
 {
   int thread_index;
@@ -517,7 +520,7 @@ VLIB_REGISTER_NODE (tls_async_process_node,static) = {
     .name = "tls-async-process",
     .state = VLIB_NODE_STATE_DISABLED,
 };
-
+#pragma GCC diagnostic pop
 /* *INDENT-ON* */
 
 /*

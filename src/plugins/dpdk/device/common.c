@@ -61,7 +61,9 @@ dpdk_device_setup (dpdk_device_t * xd)
   vlib_thread_main_t *tm = vlib_get_thread_main ();
   vnet_sw_interface_t *sw = vnet_get_sw_interface (vnm, xd->sw_if_index);
   vnet_hw_interface_t *hi = vnet_get_hw_interface (vnm, xd->hw_if_index);
+#if RTE_VERSION >= RTE_VERSION_NUM(21, 11, 0, 0)
   u16 buf_sz = vlib_buffer_get_default_data_size (vm);
+#endif
   vnet_hw_if_caps_change_t caps = {};
   struct rte_eth_dev_info dev_info;
   struct rte_eth_conf conf = {};

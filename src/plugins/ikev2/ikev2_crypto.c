@@ -25,6 +25,9 @@
 #include <openssl/bn.h>
 #include <openssl/dh.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 /* from RFC7296 */
 static const char modp_dh_768_prime[] =
   "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
@@ -1144,6 +1147,7 @@ ikev2_crypto_init (ikev2_main_t * km)
   tr->esn_type = IKEV2_TRANSFORM_ESN_TYPE_NO_ESN;
 }
 
+#pragma GCC diagnostic pop
 
 
 /*

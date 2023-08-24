@@ -76,21 +76,21 @@ ifeq ($(MACHINE),x86_64)
 DEB_DEPENDS += libhyperscan-dev
 endif
 DEB_DEPENDS += libnl-3-dev libnl-route-3-dev
-DEB_DEPENDS += enchant  # for docs
+#DEB_DEPENDS += enchant  # for docs
 DEB_DEPENDS += python3-virtualenv
 DEB_DEPENDS += libssl-dev
 DEB_DEPENDS += libelf-dev # for libbpf (af_xdp)
 
 LIBFFI=libffi6 # works on all but 20.04 and debian-testing
 
-ifeq ($(OS_VERSION_ID),20.04)
-	DEB_DEPENDS += python3-virtualenv
+ifeq ($(OS_VERSION_ID),22.04)
+	#DEB_DEPENDS += python3-virtualenv
 	DEB_DEPENDS += libssl-dev
 	DEB_DEPENDS += libelf-dev # for libbpf (af_xdp)
 	# TODO: change CLANG_FORMAT_VER default in extras/scripts/checkstyle.sh
 	#       when clang-format-10 is removed
-	DEB_DEPENDS += clang-11 clang-format-11 clang-format-10
-	LIBFFI=libffi7
+	DEB_DEPENDS += clang-11 clang-format-11 #clang-format-10
+	LIBFFI=libffi8
 	DEB_DEPENDS += enchant-2  # for docs
 else ifeq ($(OS_VERSION_ID),20.10)
 	# TODO: change CLANG_FORMAT_VER default in extras/scripts/checkstyle.sh

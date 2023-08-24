@@ -22,9 +22,10 @@ DPDK_FAILSAFE_PMD            ?= n
 DPDK_MACHINE                 ?= default
 DPDK_MLX_IBV_LINK            ?= static
 
-dpdk_version                 ?= 21.11
+dpdk_version                 ?= 21.11.4
 dpdk_base_url                ?= http://fast.dpdk.org/rel
 dpdk_tarball                 := dpdk-$(dpdk_version).tar.xz
+dpdk_tarball_md5sum_21.11.4  := b24201da07d3fd87cacc2aa03586aed3
 dpdk_tarball_md5sum_21.11    := 58660bbbe9e95abce86e47692b196555
 dpdk_tarball_md5sum_21.08    := de33433a1806280996a0ecbe66e3642f
 dpdk_tarball_md5sum_21.05    := a78bba290b11d9717d1272cc6bfaf7c3
@@ -66,7 +67,12 @@ DPDK_DRIVERS_DISABLED := baseband/\*,	\
 	net/softnic,						\
 	net/thunderx,						\
 	raw/ifpga,							\
-	net/af_xdp
+	net/af_xdp,						\
+	dma/cnxk,						\
+	net/cnxk,						\
+	crypto/cnxk,						\
+	mempool/cnxk,						\
+	common/cnxk
 
 DPDK_LIBS_DISABLED := acl,				\
 	bbdev,								\

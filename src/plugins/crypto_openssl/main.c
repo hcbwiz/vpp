@@ -25,6 +25,9 @@
 #include <vnet/crypto/crypto.h>
 #include <vpp/app/version.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
 typedef struct
 {
   CLIB_CACHE_LINE_ALIGN_MARK (cacheline0);
@@ -548,6 +551,8 @@ VLIB_PLUGIN_REGISTER () = {
   .version = VPP_BUILD_VER,
   .description = "OpenSSL Crypto Engine",
 };
+
+#pragma GCC diagnostic pop
 /* *INDENT-ON* */
 
 /*
