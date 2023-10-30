@@ -182,6 +182,7 @@ dpdk_flow_add (dpdk_device_t * xd, vnet_flow_t * f, dpdk_flow_entry_t * fe)
   struct rte_flow_action_rss rss = { 0 };
   struct rte_flow_item *item, *items = 0;
   struct rte_flow_action *action, *actions = 0;
+  u32 teid[2];
   bool fate = false;
 
   enum
@@ -451,6 +452,28 @@ dpdk_flow_add (dpdk_device_t * xd, vnet_flow_t * f, dpdk_flow_entry_t * fe)
 	}
       else if (f->type == VNET_FLOW_TYPE_IP4_GTPU)
 	{
+	  teid[0] = clib_host_to_net_u32 (f->ip4_gtpu.teid);
+	  teid[1] = 0x7000000; //max to 8 queues
+
+	  clib_memset (raw, 0, sizeof raw);
+	  //spec
+	  raw[0].item.relative = 1,
+	  raw[0].item.offset = 4;
+	  raw[0].item.length = 4;
+	  raw[0].item.pattern = (u8*)teid;
+
+	  //mask
+	  raw[1].item.relative = 1;
+	  raw[1].item.offset = -1;
+	  raw[1].item.length = -1;
+	  raw[1].item.pattern = (u8*)(teid+1);
+
+	  vec_add2 (items, item, 1);
+	  item->type = RTE_FLOW_ITEM_TYPE_RAW;
+	  item->spec = raw;
+	  item->mask = raw + 1;
+
+	  /*
 	  gtp[0].teid = clib_host_to_net_u32 (f->ip4_gtpu.teid);
 	  gtp[1].teid = ~0;
 
@@ -458,6 +481,7 @@ dpdk_flow_add (dpdk_device_t * xd, vnet_flow_t * f, dpdk_flow_entry_t * fe)
 	  item->type = RTE_FLOW_ITEM_TYPE_GTPU;
 	  item->spec = gtp;
 	  item->mask = gtp + 1;
+	  */
 	}
       else if (f->type == VNET_FLOW_TYPE_IP4_VXLAN)
 	{
