@@ -796,13 +796,16 @@ ip_gtpu_bypass_inline (vlib_main_t * vm,
 			vlib_frame_t * frame,
 			u32 is_ip4)
 {
-  gtpu_main_t * gtm = &gtpu_main;
+
   u32 * from, * to_next, n_left_from, n_left_to_next, next_index;
   vlib_node_runtime_t * error_node = vlib_node_get_runtime (vm, ip4_input_node.index);
+#if VTEP_VALIDATION
+  gtpu_main_t * gtm = &gtpu_main;
   vtep4_key_t last_vtep4;	/* last IPv4 address / fib index
 				   matching a local VTEP address */
   vtep6_key_t last_vtep6;	/* last IPv6 address / fib index
 				   matching a local VTEP address */
+#endif
   vlib_buffer_t *bufs[VLIB_FRAME_SIZE], **b = bufs;
 
   from = vlib_frame_vector_args (frame);
@@ -813,10 +816,12 @@ ip_gtpu_bypass_inline (vlib_main_t * vm,
   if (node->flags & VLIB_NODE_FLAG_TRACE)
     ip4_forward_next_trace (vm, node, frame, VLIB_TX);
 
+#if VTEP_VALIDATION
   if (is_ip4)
     vtep4_key_init (&last_vtep4);
   else
     vtep6_key_init (&last_vtep6);
+#endif
 
   while (n_left_from > 0)
     {
@@ -889,10 +894,10 @@ ip_gtpu_bypass_inline (vlib_main_t * vm,
 	    udp0 = ip4_next_header (ip40);
 	  else
 	    udp0 = ip6_next_header (ip60);
-
 	  if (udp0->dst_port != clib_host_to_net_u16 (UDP_DST_PORT_GTPU))
 	    goto exit0; /* not GTPU packet */
 
+#if VTEP_VALIDATION
 	  /* Validate DIP against VTEPs*/
 	  if (is_ip4)
 	    {
@@ -909,6 +914,7 @@ ip_gtpu_bypass_inline (vlib_main_t * vm,
 	      if (!vtep6_check (&gtm->vtep_table, b0, ip60, &last_vtep6))
 		goto exit0;	/* no local VTEP for GTPU packet */
 	    }
+#endif
 
 	  flags0 = b0->flags;
 	  good_udp0 = (flags0 & VNET_BUFFER_F_L4_CHECKSUM_CORRECT) != 0;
@@ -972,6 +978,7 @@ ip_gtpu_bypass_inline (vlib_main_t * vm,
 	  if (udp1->dst_port != clib_host_to_net_u16 (UDP_DST_PORT_GTPU))
 	    goto exit1; /* not GTPU packet */
 
+#if VTEP_VALIDATION
 	  /* Validate DIP against VTEPs*/
 	  if (is_ip4)
 	    {
@@ -988,6 +995,7 @@ ip_gtpu_bypass_inline (vlib_main_t * vm,
               if (!vtep6_check (&gtm->vtep_table, b1, ip61, &last_vtep6))
                 goto exit1;	/* no local VTEP for GTPU packet */
 	    }
+#endif
 
 	  flags1 = b1->flags;
 	  good_udp1 = (flags1 & VNET_BUFFER_F_L4_CHECKSUM_CORRECT) != 0;
@@ -1088,6 +1096,7 @@ ip_gtpu_bypass_inline (vlib_main_t * vm,
 	  if (udp0->dst_port != clib_host_to_net_u16 (UDP_DST_PORT_GTPU))
 	    goto exit; /* not GTPU packet */
 
+#if VTEP_VALIDATION
 	  /* Validate DIP against VTEPs*/
 	  if (is_ip4)
 	    {
@@ -1104,6 +1113,7 @@ ip_gtpu_bypass_inline (vlib_main_t * vm,
               if (!vtep6_check (&gtm->vtep_table, b0, ip60, &last_vtep6))
                 goto exit;	/* no local VTEP for GTPU packet */
 	    }
+#endif
 
 	  flags0 = b0->flags;
 	  good_udp0 = (flags0 & VNET_BUFFER_F_L4_CHECKSUM_CORRECT) != 0;
@@ -1180,7 +1190,7 @@ VLIB_REGISTER_NODE (ip4_gtpu_bypass_node) = {
   .n_next_nodes = IP_GTPU_BYPASS_N_NEXT,
   .next_nodes = {
     [IP_GTPU_BYPASS_NEXT_DROP] = "error-drop",
-    [IP_GTPU_BYPASS_NEXT_GTPU] = "gtpu4-input",
+    [IP_GTPU_BYPASS_NEXT_GTPU] = "upf-gtpu4-input",
   },
 
   .format_buffer = format_ip4_header,
