@@ -1219,7 +1219,7 @@ VLIB_REGISTER_NODE (ip6_gtpu_bypass_node) = {
   .n_next_nodes = IP_GTPU_BYPASS_N_NEXT,
   .next_nodes = {
     [IP_GTPU_BYPASS_NEXT_DROP] = "error-drop",
-    [IP_GTPU_BYPASS_NEXT_GTPU] = "gtpu6-input",
+    [IP_GTPU_BYPASS_NEXT_GTPU] = "upf-gtpu6-input",
   },
 
   .format_buffer = format_ip6_header,
