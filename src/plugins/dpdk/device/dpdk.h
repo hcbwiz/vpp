@@ -28,6 +28,15 @@
 #include <rte_ethdev.h>
 #include <rte_version.h>
 #include <rte_net.h>
+#if RTE_VERSION >= RTE_VERSION_NUM(22, 11, 0, 0)
+#include <rte_bus.h>
+#include <rte_pci.h>
+#include <ctype.h>
+
+#include <bus_driver.h>
+#include <bus_pci_driver.h>
+#include <bus_vmbus_driver.h>
+#endif
 
 #include <vnet/devices/devices.h>
 
@@ -110,14 +119,14 @@ typedef struct
   u16 n_rx_desc;
   u16 n_tx_desc;
   u32 supported_flow_actions;
-  i32 enable_lsc_int : 1;
-  i32 enable_rxq_int : 1;
-  i32 disable_rx_scatter : 1;
-  i32 program_vlans : 1;
-  i32 mq_mode_none : 1;
-  i32 interface_number_from_port_id : 1;
-  i32 use_intel_phdr_cksum : 1;
-  i32 int_unmaskable : 1;
+  u32 enable_lsc_int : 1;
+  u32 enable_rxq_int : 1;
+  u32 disable_rx_scatter : 1;
+  u32 program_vlans : 1;
+  u32 mq_mode_none : 1;
+  u32 interface_number_from_port_id : 1;
+  u32 use_intel_phdr_cksum : 1;
+  u32 int_unmaskable : 1;
 } dpdk_driver_t;
 
 dpdk_driver_t *dpdk_driver_find (const char *name, const char **desc);
@@ -243,6 +252,7 @@ typedef struct
   };
   dpdk_device_addr_type_t dev_addr_type;
   u8 *name;
+  u8 *tag;
   u8 is_blacklisted;
 
 #define _(x) uword x;
