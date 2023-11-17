@@ -26,7 +26,8 @@
 #define CRYPTODEV_CACHE_QUEUE_MASK (VNET_CRYPTO_FRAME_POOL_SIZE - 1)
 #define CRYPTODEV_MAX_INFLIGHT	   (CRYPTODEV_NB_CRYPTO_OPS - 1)
 #define CRYPTODEV_AAD_MASK	   (CRYPTODEV_NB_CRYPTO_OPS - 1)
-#define CRYPTODEV_DEQ_CACHE_SZ	   32
+#define CRYPTODE_ENQ_MAX	   64
+#define CRYPTODE_DEQ_MAX	   64
 #define CRYPTODEV_NB_SESSION	   4096
 #define CRYPTODEV_MAX_IV_SIZE	   16
 #define CRYPTODEV_MAX_AAD_SIZE	   16
@@ -81,10 +82,16 @@ typedef enum
   CRYPTODEV_N_OP_TYPES,
 } cryptodev_op_type_t;
 
+#if RTE_VERSION >= RTE_VERSION_NUM(22, 11, 0, 0)
+typedef void cryptodev_session_t;
+#else
+typedef struct rte_cryptodev_sym_session cryptodev_session_t;
+#endif
+
 /* Cryptodev session data, one data per direction per numa */
 typedef struct
 {
-  struct rte_cryptodev_sym_session ***keys;
+  cryptodev_session_t ***keys;
 } cryptodev_key_t;
 
 /* Replicate DPDK rte_cryptodev_sym_capability structure with key size ranges
@@ -125,7 +132,9 @@ typedef struct
 typedef struct
 {
   struct rte_mempool *sess_pool;
+#if RTE_VERSION < RTE_VERSION_NUM(22, 11, 0, 0)
   struct rte_mempool *sess_priv_pool;
+#endif
 } cryptodev_session_pool_t;
 
 typedef struct
@@ -146,28 +155,52 @@ typedef struct
 
 typedef struct
 {
+  vnet_crypto_async_frame_t *f;
+
+  u8 enqueued;
+  u8 dequeued;
+  u8 deq_state;
+  u8 frame_inflight;
+
+  u8 op_type;
+  u8 aad_len;
+  u8 n_elts;
+  u8 reserved;
+} cryptodev_async_ring_elt;
+
+typedef struct
+{
+  cryptodev_async_ring_elt frames[VNET_CRYPTO_FRAME_POOL_SIZE];
+  uint16_t head;
+  uint16_t tail;
+  uint16_t enq; /*record the frame currently being enqueued */
+  uint16_t deq; /*record the frame currently being dequeued */
+} cryptodev_async_frame_sw_ring;
+
+typedef struct
+{
   CLIB_CACHE_LINE_ALIGN_MARK (cacheline0);
   vlib_buffer_t *b[VNET_CRYPTO_FRAME_SIZE];
   union
   {
-    struct
-    {
-      cryptodev_op_t **cops;
-      struct rte_mempool *cop_pool;
-      struct rte_ring *ring;
-    };
+    struct rte_mempool *cop_pool;
     struct
     {
       struct rte_crypto_raw_dp_ctx *ctx;
-      struct rte_ring *cached_frame;
       u16 aad_index;
       u8 *aad_buf;
       u64 aad_phy_addr;
-      struct rte_cryptodev_sym_session *reset_sess;
+      cryptodev_session_t *reset_sess;
     };
   };
+
+  cryptodev_async_frame_sw_ring frame_ring;
   u16 cryptodev_id;
   u16 cryptodev_q;
+  u16 frames_on_ring;
+  u16 enqueued_not_dequeueq;
+  u16 deqeued_not_returned;
+  u16 pending_to_qat;
   u16 inflight;
 } cryptodev_engine_thread_t;
 
@@ -184,19 +217,23 @@ typedef struct
   u32 sess_sz;
   u32 drivers_cnt;
   u8 is_raw_api;
+#if RTE_VERSION >= RTE_VERSION_NUM(22, 11, 0, 0)
+  u8 driver_id;
+#endif
 } cryptodev_main_t;
 
 extern cryptodev_main_t cryptodev_main;
 
 static_always_inline void
 cryptodev_mark_frame_err_status (vnet_crypto_async_frame_t *f,
-				 vnet_crypto_op_status_t s)
+				 vnet_crypto_op_status_t s,
+				 vnet_crypto_async_frame_state_t fs)
 {
   u32 n_elts = f->n_elts, i;
 
   for (i = 0; i < n_elts; i++)
     f->elts[i].status = s;
-  f->state = VNET_CRYPTO_FRAME_STATE_NOT_PROCESSED;
+  f->state = fs;
 }
 
 int cryptodev_session_create (vlib_main_t *vm, vnet_crypto_key_index_t idx,
