@@ -541,7 +541,10 @@ slow_path_ed (vlib_main_t *vm, snat_main_t *sm, vlib_buffer_t *b,
   s = nat_ed_session_alloc (sm, thread_index, now, proto);
   ASSERT (s);
 
-  tx_fib_index = get_tx_fib_index (rx_fib_index, r_addr);
+  if (sm->controlled)
+    tx_fib_index = rx_fib_index;
+  else
+    tx_fib_index = get_tx_fib_index (rx_fib_index, r_addr);
 
   if (!is_sm)
     {
