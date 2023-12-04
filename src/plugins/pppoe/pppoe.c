@@ -353,7 +353,11 @@ int vnet_pppoe_add_del_session
       pool_get_aligned (pem->sessions, t, CLIB_CACHE_LINE_BYTES);
       clib_memset (t, 0, sizeof (*t));
 
-      clib_memcpy (t->local_mac, hi->hw_address, 6);
+      //clib_memcpy(t->local_mac, hi->hw_address, 6);
+      //workaround for the compile bug.
+      for (int i = 0; i < 6; ++i) {
+	      t->local_mac[i] = hi->hw_address[i];
+      }
 
       /* copy from arg structure */
 #define _(x) t->x = a->x;
