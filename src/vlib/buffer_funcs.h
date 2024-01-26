@@ -564,6 +564,11 @@ vlib_buffer_alloc_from_pool (vlib_main_t * vm, u32 * buffers, u32 n_buffers,
 	return (n_buffers);
     }
 
+  if (bm->alloc_callback_fn)
+  {
+	  return bm->alloc_callback_fn (vm, buffer_pool_index, buffers, n_buffers);
+  }
+
   bp = vec_elt_at_index (bm->buffer_pools, buffer_pool_index);
   bpt = vec_elt_at_index (bp->threads, vm->thread_index);
 
@@ -580,7 +585,7 @@ vlib_buffer_alloc_from_pool (vlib_main_t * vm, u32 * buffers, u32 n_buffers,
       goto done;
     }
 
-  if (PREDICT_FALSE (bm->alloc_callback_fn != 0))
+  /*if (PREDICT_FALSE (bm->alloc_callback_fn != 0))
     {
       n_buffers = bm->alloc_callback_fn (vm, buffer_pool_index, buffers, n_buffers);
       if (n_buffers == 0)
@@ -589,7 +594,7 @@ vlib_buffer_alloc_from_pool (vlib_main_t * vm, u32 * buffers, u32 n_buffers,
 	return 0;
       }
       return n_buffers;
-    }
+    }*/
 
   /* alloc bigger than cache - take buffers directly from main pool */
   if (n_buffers >= VLIB_BUFFER_POOL_PER_THREAD_CACHE_SZ)
@@ -742,6 +747,11 @@ vlib_buffer_pool_put (vlib_main_t * vm, u8 buffer_pool_index,
     vlib_buffer_validate_alloc_free (vm, buffers, n_buffers,
 				     VLIB_BUFFER_KNOWN_ALLOCATED);
 
+  if (bm->free_callback_fn) {
+	  bm->free_callback_fn (vm, buffer_pool_index, buffers, n_buffers);
+	  return;
+  }
+
   n_cached = bpt->n_cached;
   n_empty = VLIB_BUFFER_POOL_PER_THREAD_CACHE_SZ - n_cached;
   if (n_buffers <= n_empty)
@@ -752,11 +762,11 @@ vlib_buffer_pool_put (vlib_main_t * vm, u8 buffer_pool_index,
       return;
     }
 
-  if (PREDICT_FALSE (bm->free_callback_fn != 0))
+  /*if (PREDICT_FALSE (bm->free_callback_fn != 0))
     {
 	bm->free_callback_fn (vm, buffer_pool_index, buffers, n_buffers);
 	return;
-    }
+    }*/
 
   vlib_buffer_copy_indices (bpt->cached_buffers + n_cached,
 			    buffers + n_buffers - n_empty, n_empty);

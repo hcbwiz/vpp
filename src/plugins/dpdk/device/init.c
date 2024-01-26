@@ -1335,7 +1335,7 @@ dpdk_config (vlib_main_t * vm, unformat_input_t * input)
 	  fcntl (log_fds[1], F_SETFL, O_NONBLOCK) == 0)
 	{
 	  FILE *f = fdopen (log_fds[1], "a");
-	  if (f && rte_openlog_stream (stdout) == 0)
+	  if (f && rte_openlog_stream (stderr) == 0)
 	    {
 	      clib_file_t t = { 0 };
 	      t.read_function = dpdk_log_read_ready;
@@ -1385,7 +1385,7 @@ dpdk_config (vlib_main_t * vm, unformat_input_t * input)
   if ((error = dpdk_buffer_pools_create (vm)))
     return error;
 
- /* to enable termination cases */
+  /* to enable termination cases */
   dpdk_termination_case_enable(vm);
 
   return 0;
@@ -1488,7 +1488,7 @@ dpdk_process (vlib_main_t * vm, vlib_node_runtime_t * rt, vlib_frame_t * f)
 
   if (error)
     clib_error_report (error);
-
+#if 0
   if (dpdk_cryptodev_init)
     {
       error = dpdk_cryptodev_init (vm);
@@ -1499,6 +1499,7 @@ dpdk_process (vlib_main_t * vm, vlib_node_runtime_t * rt, vlib_frame_t * f)
 	  clib_error_free (error);
 	}
     }
+#endif
 
   vlib_worker_thread_barrier_release (vm);
   tm->worker_thread_release = 1;

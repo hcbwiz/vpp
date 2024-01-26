@@ -41,45 +41,67 @@ struct vlib_args {
 	vlib_buffer_pool_t *bp;
 };
 
+
+#define DPAA2_MEMPOOL_MAX_ACQ_REL 32
+
 u32
 dpdk_alloc_callback (vlib_main_t *vm, u8 buffer_pool_index, u32 *buffers,
 		     u32 n_buffers)
 {
 	struct rte_mempool *mp;
-	struct rte_mbuf *mb;
-	vlib_buffer_t *b;
-	u32 i, mbuf_count;
-
+	struct rte_mbuf *mb[DPAA2_MEMPOOL_MAX_ACQ_REL];
+	//vlib_buffer_t *b;
+	u32 i = 0, mbuf_count;
 	vlib_buffer_pool_t *bp = vlib_get_buffer_pool (vm, buffer_pool_index);
-	mp = dpdk_mempool_by_buffer_pool_index[bp->index];
 
+	mp = dpdk_mempool_by_buffer_pool_index[bp->index];
 	mbuf_count = rte_mempool_avail_count (mp);
 	if (n_buffers <= mbuf_count)
 	{
-		for (i = 0; i < n_buffers; i++)
+		mbuf_count = n_buffers;
+		while (mbuf_count > DPAA2_MEMPOOL_MAX_ACQ_REL) {
+			if (!rte_pktmbuf_alloc_bulk(mp, mb, DPAA2_MEMPOOL_MAX_ACQ_REL)) {
+				vlib_get_buffer_indices_with_offset(vm, mb, buffers + i, DPAA2_MEMPOOL_MAX_ACQ_REL, sizeof(struct rte_mbuf));
+			}
+			i += DPAA2_MEMPOOL_MAX_ACQ_REL;
+			mbuf_count -= DPAA2_MEMPOOL_MAX_ACQ_REL;
+
+		}
+		if (mbuf_count) {
+			if (!rte_pktmbuf_alloc_bulk(mp, mb, mbuf_count)) {
+                                vlib_get_buffer_indices_with_offset(vm, mb, buffers + i, mbuf_count, sizeof(struct rte_mbuf));
+                        }
+		}
+
+		return n_buffers;
+		/*i = rte_pktmbuf_alloc_bulk(mp, mb, n_buffers);
+		if (!i) {
+			vlib_get_buffer_indices_with_offset(vm, mb, buffers, n_buffers, sizeof(struct rte_mbuf));
+			return n_buffers;
+		}*/
+		/*for (i = 0; i < n_buffers; i++)
 		{
 			mb = rte_pktmbuf_alloc(mp);
 			if (!mb) {
 				clib_error ("mbuf failed");
 				return 0;
 			}
-		b = vlib_buffer_from_rte_mbuf (mb);
-		u32 bi = vlib_get_buffer_index(vm, b);
-		buffers[i] = bi;
+			b = vlib_buffer_from_rte_mbuf (mb);
+			u32 bi = vlib_get_buffer_index(vm, b);
+			buffers[i] = bi;
 		}
-		return n_buffers;
+		return n_buffers;*/
 	}
-	else
-		return 0;
+
+	return 0;
 }
 
 u32
 dpdk_free_callback (vlib_main_t *vm, u8 buffer_pool_index, u32 *buffers,
                     u32 n_buffers)
 {
-	struct rte_mbuf *mb;
-	int i;
-
+	struct rte_mbuf *mb[256];
+	/*int i;
 	for (i = 0; i < n_buffers; i++)
 	{
 		vlib_buffer_t *b = vlib_get_buffer (vm, buffers[i]);
@@ -89,7 +111,10 @@ dpdk_free_callback (vlib_main_t *vm, u8 buffer_pool_index, u32 *buffers,
 			continue;
 		}
 		rte_pktmbuf_free(mb);
-	}
+	}*/
+
+	vlib_get_buffers_with_offset(vm, buffers, mb, n_buffers, -(i32) sizeof(struct rte_mbuf));
+	rte_pktmbuf_free_bulk(mb, n_buffers);
 	return 0;
 }
 
